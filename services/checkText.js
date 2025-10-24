@@ -1,23 +1,38 @@
 import axios from "axios";
-import dotenv from "dotenv";
 
-dotenv.config();
-
-const HF_TOKEN = process.env.HF_TOKEN;
-
-export async function checkText(content) {
+export const checkText = async (text) => {
   try {
+    const HF_API_URL = "https://api-inference.huggingface.co/models/unitary/toxic-bert";
+    const HF_API_KEY = process.env.HF_API_KEY;
+
     const response = await axios.post(
-      "https://api-inference.huggingface.co/models/unitary/toxic-bert",
-      { inputs: content },
-      {
-        headers: { Authorization: `Bearer ${HF_TOKEN}` },
-      }
+      HF_API_URL,
+      { inputs: text },
+      { headers: { Authorization: `Bearer ${HF_API_KEY}` } }
     );
 
-    return response.data;
+    const results = response.data[0];
+    const threat = results.find(r => r.label.toLowerCase().includes("threat"));
+    const insult = results.find(r => r.label.toLowerCase().includes("insult"));
+
+    const threshold = 0.05;
+    let flagged = "SAFE";
+
+    if (threat && threat.score > threshold) {
+      flagged = "THREAT";
+    } else if (insult && insult.score > threshold) {
+      flagged = "INSULT";
+    }
+
+    return {
+      flagged,
+      results: results.map(r => ({
+        label: r.label,
+        score: r.score,
+      })),
+    };
   } catch (error) {
-    console.error("Error saat cek teks:", error.message);
-    throw new Error("Gagal memproses teks di Hugging Face");
+    console.error("Error checkText:", error.message);
+    return { error: "Gagal memproses teks" };
   }
-}
+};
